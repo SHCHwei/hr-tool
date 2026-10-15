@@ -113,7 +113,7 @@
 
 ### 1. 安裝套件需求
 ```bash
-pip install PySide6 openpyxl
+pip install -r requirements.txt
 ```
 
 ### 2. 啟動應用程式

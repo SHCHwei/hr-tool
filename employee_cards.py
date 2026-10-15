@@ -1,0 +1,80 @@
+import sys
+
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
+    QLabel, QLineEdit, QPushButton, QScrollArea, QFrame, QGridLayout
+)
+from PySide6.QtCore import Qt
+
+CARDS_PER_ROW = 3
+
+
+class EmployeeCardsWindow(QMainWindow):
+    """員工卡片畫面：頂端輸入框與新增按鈕，下方每列三張員工卡片。"""
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("員工列表")
+        self.resize(700, 500)
+        self.employees = []
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        layout = QVBoxLayout(central)
+
+        top = QHBoxLayout()
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("請輸入員工名稱")
+        self.name_input.returnPressed.connect(self.add_employee)
+        self.add_button = QPushButton("增加")
+        self.add_button.clicked.connect(self.add_employee)
+        top.addWidget(self.name_input)
+        top.addWidget(self.add_button)
+        layout.addLayout(top)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        self.grid = QGridLayout(container)
+        self.grid.setAlignment(Qt.AlignTop)
+        for col in range(CARDS_PER_ROW):
+            self.grid.setColumnStretch(col, 1)
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+
+    def add_employee(self):
+        name = self.name_input.text().strip()
+        if not name:
+            return
+        index = len(self.employees)
+        self.employees.append(name)
+        self.grid.addWidget(self._make_card(name),
+                            index // CARDS_PER_ROW, index % CARDS_PER_ROW)
+        self.name_input.clear()
+        self.name_input.setFocus()
+
+    @staticmethod
+    def _make_card(name):
+        card = QFrame()
+        card.setFrameShape(QFrame.StyledPanel)
+        card.setMinimumHeight(80)
+        card.setStyleSheet(
+            "QFrame { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 8px; }"
+        )
+        card_layout = QVBoxLayout(card)
+        label = QLabel(name)
+        label.setAlignment(Qt.AlignCenter)
+        label.setStyleSheet("border: none; font-size: 16px;")
+        card_layout.addWidget(label)
+        return card
+
+
+def main():
+    app = QApplication(sys.argv)
+    window = EmployeeCardsWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()

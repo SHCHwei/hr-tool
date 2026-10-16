@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -11,6 +12,21 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 CARDS_PER_ROW = 3
+EMPLOYEE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "employee.json")
+
+
+def load_employees(path=EMPLOYEE_FILE):
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError):
+        return []
+    return [n for n in data if isinstance(n, str)] if isinstance(data, list) else []
+
+
+def save_employees(employees, path=EMPLOYEE_FILE):
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(employees, f, ensure_ascii=False, indent=2)
 
 
 class EmployeeCardsWindow(QMainWindow):
@@ -21,6 +37,7 @@ class EmployeeCardsWindow(QMainWindow):
         self.setWindowTitle("員工列表")
         self.resize(700, 500)
         self.employees = []
+        saved = load_employees()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -46,16 +63,23 @@ class EmployeeCardsWindow(QMainWindow):
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
+        for name in saved:
+            self._append_card(name)
+
     def add_employee(self):
         name = self.name_input.text().strip()
         if not name:
             return
+        self._append_card(name)
+        save_employees(self.employees)
+        self.name_input.clear()
+        self.name_input.setFocus()
+
+    def _append_card(self, name):
         index = len(self.employees)
         self.employees.append(name)
         self.grid.addWidget(self._make_card(name),
                             index // CARDS_PER_ROW, index % CARDS_PER_ROW)
-        self.name_input.clear()
-        self.name_input.setFocus()
 
     @staticmethod
     def _make_card(name):

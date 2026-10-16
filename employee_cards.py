@@ -12,10 +12,27 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt
 
 CARDS_PER_ROW = 3
-EMPLOYEE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "employee.json")
+APP_DIR_NAME = "HRTool"
+EMPLOYEE_FILENAME = "employees.json"
 
 
-def load_employees(path=EMPLOYEE_FILE):
+def get_data_dir():
+    """Windows: %LOCALAPPDATA%\\HRTool；其他系統: ~/.local/share/HRTool"""
+    if sys.platform.startswith("win"):
+        base = os.environ.get("LOCALAPPDATA") or os.path.join(
+            os.path.expanduser("~"), "AppData", "Local")
+    else:
+        base = os.environ.get("XDG_DATA_HOME") or os.path.join(
+            os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, APP_DIR_NAME)
+
+
+def get_employee_file():
+    return os.path.join(get_data_dir(), EMPLOYEE_FILENAME)
+
+
+def load_employees(path=None):
+    path = path or get_employee_file()
     try:
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
@@ -24,7 +41,9 @@ def load_employees(path=EMPLOYEE_FILE):
     return [n for n in data if isinstance(n, str)] if isinstance(data, list) else []
 
 
-def save_employees(employees, path=EMPLOYEE_FILE):
+def save_employees(employees, path=None):
+    path = path or get_employee_file()
+    os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w", encoding="utf-8") as f:
         json.dump(employees, f, ensure_ascii=False, indent=2)
 
@@ -37,7 +56,6 @@ class EmployeeCardsWindow(QMainWindow):
         self.setWindowTitle("員工列表")
         self.resize(700, 500)
         self.employees = []
-        saved = load_employees()
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -63,7 +81,11 @@ class EmployeeCardsWindow(QMainWindow):
         scroll.setWidget(container)
         layout.addWidget(scroll)
 
-        for name in saved:
+        self.load_employees()
+
+    def load_employees(self):
+        """從 employees.json 載入員工名單並顯示成卡片。"""
+        for name in load_employees():
             self._append_card(name)
 
     def add_employee(self):
@@ -71,7 +93,10 @@ class EmployeeCardsWindow(QMainWindow):
         if not name:
             return
         self._append_card(name)
-        save_employees(self.employees)
+        try:
+            save_employees(self.employees)
+        except OSError as e:
+            print(f"無法儲存員工名單: {e}", file=sys.stderr)
         self.name_input.clear()
         self.name_input.setFocus()
 

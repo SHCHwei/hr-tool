@@ -55,8 +55,10 @@ def create_light_palette():
 
 
 class ClockInApp(QMainWindow):
-    def __init__(self):
+    def __init__(self, employee_name="", on_close=None):
         super().__init__()
+        self.employee_name = employee_name
+        self.on_close = on_close
         self.setWindowTitle("月打卡記錄表輸入系統 (Clock-in Management)")
         self.resize(850, 750)
         self.setMinimumSize(750, 600)
@@ -68,6 +70,11 @@ class ClockInApp(QMainWindow):
         self.init_ui()
         self.apply_styles()
         self.on_date_changed()
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        if event.isAccepted() and self.on_close:
+            self.on_close()
 
     def init_ui(self):
         main_widget = QWidget()
@@ -104,6 +111,13 @@ class ClockInApp(QMainWindow):
 
         controls_layout.addStretch(1)
 
+
+        # 返回
+        self.btn_back = QPushButton("返回")
+        self.btn_back.clicked.connect(self.close)
+        controls_layout.addWidget(self.btn_back)
+
+
         # 清空按鈕
         self.btn_clear = QPushButton("🗑️ 清空表格")
         self.btn_clear.clicked.connect(self.clear_all_inputs)
@@ -111,9 +125,8 @@ class ClockInApp(QMainWindow):
 
         employee_layout = QHBoxLayout()
         employee_layout.addWidget(QLabel("員工姓名:"))
-        self.employee_name_input = QLineEdit()
-        self.employee_name_input.setPlaceholderText("請輸入員工姓名")
-        employee_layout.addWidget(self.employee_name_input, stretch=1)
+        self.employee_name_label = QLabel(self.employee_name)
+        employee_layout.addWidget(self.employee_name_label, stretch=1)
         employee_layout.addStretch(1)
         self.btn_import = QPushButton("匯入")
         employee_layout.addWidget(self.btn_import)
@@ -421,7 +434,7 @@ class ClockInApp(QMainWindow):
         year = self.year_spin.value()
         month = self.month_spin.value()
         
-        employee_name = self.employee_name_input.text().strip()
+        employee_name = self.employee_name_label.text().strip()
         filename_prefix = f"{employee_name}_" if employee_name else ""
         default_filename = f"{filename_prefix}員工打卡表記錄_{year}年{month:02d}月.xlsx"
         file_path, _ = QFileDialog.getSaveFileName(

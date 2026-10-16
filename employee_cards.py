@@ -7,7 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "generic")
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QFrame, QGridLayout
+    QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout
 )
 from PySide6.QtCore import Qt
 
@@ -56,6 +56,7 @@ class EmployeeCardsWindow(QMainWindow):
         self.setWindowTitle("員工列表")
         self.resize(700, 500)
         self.employees = []
+        self.clock_in_window = None
 
         central = QWidget()
         self.setCentralWidget(central)
@@ -103,23 +104,36 @@ class EmployeeCardsWindow(QMainWindow):
     def _append_card(self, name):
         index = len(self.employees)
         self.employees.append(name)
-        self.grid.addWidget(self._make_card(name),
-                            index // CARDS_PER_ROW, index % CARDS_PER_ROW)
+        card = self._make_card(name)
+        card.clicked.connect(
+            lambda checked=False, employee_name=name: self.open_clock_in(employee_name)
+        )
+        self.grid.addWidget(card, index // CARDS_PER_ROW, index % CARDS_PER_ROW)
 
     @staticmethod
     def _make_card(name):
-        card = QFrame()
-        card.setFrameShape(QFrame.StyledPanel)
+        card = QPushButton(name)
         card.setMinimumHeight(80)
         card.setStyleSheet(
-            "QFrame { background: #FFFFFF; border: 1px solid #CCCCCC; border-radius: 8px; }"
+            "QPushButton { background: #FFFFFF; border: 1px solid #CCCCCC; "
+            "border-radius: 8px; font-size: 16px; }"
+            "QPushButton:hover { background: #F0F7FF; border-color: #4A90E2; }"
         )
-        card_layout = QVBoxLayout(card)
-        label = QLabel(name)
-        label.setAlignment(Qt.AlignCenter)
-        label.setStyleSheet("border: none; font-size: 16px;")
-        card_layout.addWidget(label)
         return card
+
+    def open_clock_in(self, employee_name):
+        from clock_in_app import ClockInApp
+
+        self.clock_in_window = ClockInApp(
+            employee_name, on_close=self.return_to_employee_cards
+        )
+        self.clock_in_window.setAttribute(Qt.WA_DeleteOnClose)
+        self.hide()
+        self.clock_in_window.show()
+
+    def return_to_employee_cards(self):
+        self.clock_in_window = None
+        self.show()
 
 
 def main():

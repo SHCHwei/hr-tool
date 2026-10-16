@@ -10,9 +10,9 @@ def main():
         print("請執行 `pip install PySide6 openpyxl`。")
         sys.exit(1)
 
-    print("檢測到 PySide6 界面庫，啟動 GUI 介面...")
-    from clock_in_app import main as run_pyside
-    run_pyside()
+    print("檢測到 PySide6 界面庫，啟動員工選擇介面...")
+    from employee_cards import main as run_employee_cards
+    run_employee_cards()
 
 if __name__ == "__main__":
     main()

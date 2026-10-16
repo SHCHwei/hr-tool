@@ -1,5 +1,8 @@
 name: Build Windows
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches:
+      - main
 jobs:
   build:
     runs-on: windows-latest

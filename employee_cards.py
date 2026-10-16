@@ -1,4 +1,8 @@
+import os
 import sys
+
+# 避免載入 GTK3 平台主題（新版 GNOME 缺少 xsettings 'antialiasing' 設定鍵會導致崩潰）
+os.environ.setdefault("QT_QPA_PLATFORMTHEME", "generic")
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,

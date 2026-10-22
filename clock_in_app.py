@@ -10,13 +10,65 @@ from time_calculator import calculate_daily_overtime_and_early, calculate_late, 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QScrollArea, QFrame,
-    QGridLayout, QFileDialog, QMessageBox, QGroupBox, QSpinBox
+    QGridLayout, QFileDialog, QMessageBox, QGroupBox, QSpinBox,
+    QStyle, QStyleOptionSpinBox,
 )
-from PySide6.QtCore import Qt, QSize, QRegularExpression
-from PySide6.QtGui import QFont, QColor, QPalette, QRegularExpressionValidator
+from PySide6.QtCore import Qt, QSize, QRegularExpression, QPoint
+from PySide6.QtGui import (
+    QFont,
+    QColor,
+    QPalette,
+    QRegularExpressionValidator,
+    QPainter,
+    QPolygon,
+)
 
 # 星期中文對照表
 WEEKDAYS_ZH = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+
+class ArrowSpinBox(QSpinBox):
+    """QSpinBox with clearly rendered triangular step arrows."""
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        option = QStyleOptionSpinBox()
+        self.initStyleOption(option)
+        up_rect = self.style().subControlRect(
+            QStyle.ComplexControl.CC_SpinBox,
+            option,
+            QStyle.SubControl.SC_SpinBoxUp,
+            self,
+        )
+        down_rect = self.style().subControlRect(
+            QStyle.ComplexControl.CC_SpinBox,
+            option,
+            QStyle.SubControl.SC_SpinBoxDown,
+            self,
+        )
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#357ABD"))
+
+        up_center = up_rect.center()
+        painter.drawPolygon(
+            QPolygon([
+                up_center + QPoint(-4, 2),
+                up_center + QPoint(4, 2),
+                up_center + QPoint(0, -3),
+            ])
+        )
+        down_center = down_rect.center()
+        painter.drawPolygon(
+            QPolygon([
+                down_center + QPoint(-4, -2),
+                down_center + QPoint(4, -2),
+                down_center + QPoint(0, 3),
+            ])
+        )
 
 
 def create_light_palette():
@@ -95,7 +147,7 @@ class ClockInApp(QMainWindow):
 
         # 年份選擇
         controls_layout.addWidget(QLabel("年份:"))
-        self.year_spin = QSpinBox()
+        self.year_spin = ArrowSpinBox()
         current_year = datetime.now().year
         self.year_spin.setRange(2000, 2040)
         self.year_spin.setValue(current_year)
@@ -104,7 +156,7 @@ class ClockInApp(QMainWindow):
 
         # 月份選擇
         controls_layout.addWidget(QLabel("月份:"))
-        self.month_spin = QSpinBox()
+        self.month_spin = ArrowSpinBox()
         current_month = datetime.now().month
         self.month_spin.setRange(1, 12)
         self.month_spin.setValue(current_month)
@@ -235,22 +287,17 @@ class ClockInApp(QMainWindow):
         }
         QSpinBox::up-button, QSpinBox::down-button {
             width: 18px;
-            /* background-color: #000000; */
-            border-left: 1px solid #555555;
+            background-color: #E8EEF5;
+            border-left: 1px solid #D0D7DE;
         }
-        QSpinBox::up-arrow {
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-bottom: 5px solid #FFFFFF;
+        QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+            background-color: #D6E8FA;
         }
-        QSpinBox::down-arrow {
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 5px solid #FFFFFF;
+        QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
+            background-color: #C3DCF5;
+        }
+        QSpinBox::up-arrow, QSpinBox::down-arrow {
+            image: none;
         }
         QSpinBox QLineEdit {
             background-color: #FFFFFF;

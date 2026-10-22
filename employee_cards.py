@@ -7,7 +7,8 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "generic")
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout, QComboBox
+    QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout, QComboBox,
+    QToolButton, QMessageBox,
 )
 from PySide6.QtCore import Qt
 
@@ -59,6 +60,7 @@ class EmployeeCardsWindow(QMainWindow):
         self.setWindowTitle("員工列表")
         self.resize(700, 500)
         self.employees = {}
+        self.card_widgets = {}
         self.clock_in_window = None
 
         central = QWidget()
@@ -117,22 +119,83 @@ class EmployeeCardsWindow(QMainWindow):
     def _append_card(self, name, times):
         index = len(self.employees)
         self.employees[name] = times
+        card_container = QWidget()
+        card_container.setMinimumHeight(88)
+        card_layout = QGridLayout(card_container)
+        card_layout.setContentsMargins(0, 0, 0, 0)
+
         card = self._make_card(name)
         card.clicked.connect(
             lambda checked=False, employee_name=name: self.open_clock_in(employee_name)
         )
-        self.grid.addWidget(card, index // CARDS_PER_ROW, index % CARDS_PER_ROW)
+        card_layout.addWidget(card, 0, 0)
+
+        delete_button = QToolButton(card_container)
+        delete_button.setText("×")
+        delete_button.setToolTip(f"刪除{name}")
+        delete_button.setFixedSize(24, 24)
+        delete_button.setStyleSheet(
+            "QToolButton { background: #FDECEC; color: #C62828; border: 1px solid #F2B8B5; "
+            "border-radius: 12px; font-size: 18px; font-weight: bold; }"
+            "QToolButton:hover { background: #F8C9C6; }"
+        )
+        delete_button.clicked.connect(
+            lambda checked=False, employee_name=name: self.confirm_remove_employee(employee_name)
+        )
+        card_layout.addWidget(
+            delete_button, 0, 0, alignment=Qt.AlignTop | Qt.AlignRight
+        )
+
+        self.card_widgets[name] = card_container
+        self.grid.addWidget(
+            card_container, index // CARDS_PER_ROW, index % CARDS_PER_ROW
+        )
 
     @staticmethod
     def _make_card(name):
         card = QPushButton(name)
-        card.setMinimumHeight(80)
+        card.setMinimumHeight(88)
         card.setStyleSheet(
             "QPushButton { background: #FFFFFF; border: 1px solid #CCCCCC; "
             "border-radius: 8px; font-size: 16px; }"
             "QPushButton:hover { background: #F0F7FF; border-color: #4A90E2; }"
         )
         return card
+
+    def confirm_remove_employee(self, employee_name):
+        reply = QMessageBox.question(
+            self,
+            "確認刪除員工",
+            f"確定要刪除員工「{employee_name}」嗎？",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self.remove_employee(employee_name)
+
+    def remove_employee(self, employee_name):
+        if employee_name not in self.employees:
+            return
+
+        updated_employees = {
+            name: times
+            for name, times in self.employees.items()
+            if name != employee_name
+        }
+        try:
+            save_employees(updated_employees)
+        except OSError as e:
+            QMessageBox.critical(self, "刪除失敗", f"無法儲存員工名單：\n{e}")
+            return
+
+        self.employees = updated_employees
+        card_widget = self.card_widgets.pop(employee_name)
+        self.grid.removeWidget(card_widget)
+        card_widget.deleteLater()
+        for index, widget in enumerate(self.card_widgets.values()):
+            self.grid.addWidget(
+                widget, index // CARDS_PER_ROW, index % CARDS_PER_ROW
+            )
 
     def open_clock_in(self, employee_name):
         from clock_in_app import ClockInApp

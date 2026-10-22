@@ -5,18 +5,70 @@ import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
 
-from time_calculator import calculate_daily_overtime_and_early, is_valid_hhmm
+from time_calculator import calculate_daily_overtime_and_early, calculate_late, is_valid_hhmm
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QComboBox, QLineEdit, QPushButton, QScrollArea, QFrame,
-    QGridLayout, QFileDialog, QMessageBox, QGroupBox, QSpinBox
+    QGridLayout, QFileDialog, QMessageBox, QGroupBox, QSpinBox,
+    QStyle, QStyleOptionSpinBox,
 )
-from PySide6.QtCore import Qt, QSize, QRegularExpression
-from PySide6.QtGui import QFont, QColor, QPalette, QRegularExpressionValidator
+from PySide6.QtCore import Qt, QSize, QRegularExpression, QPoint
+from PySide6.QtGui import (
+    QFont,
+    QColor,
+    QPalette,
+    QRegularExpressionValidator,
+    QPainter,
+    QPolygon,
+)
 
 # 星期中文對照表
 WEEKDAYS_ZH = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
+
+
+class ArrowSpinBox(QSpinBox):
+    """QSpinBox with clearly rendered triangular step arrows."""
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+
+        option = QStyleOptionSpinBox()
+        self.initStyleOption(option)
+        up_rect = self.style().subControlRect(
+            QStyle.ComplexControl.CC_SpinBox,
+            option,
+            QStyle.SubControl.SC_SpinBoxUp,
+            self,
+        )
+        down_rect = self.style().subControlRect(
+            QStyle.ComplexControl.CC_SpinBox,
+            option,
+            QStyle.SubControl.SC_SpinBoxDown,
+            self,
+        )
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor("#357ABD"))
+
+        up_center = up_rect.center()
+        painter.drawPolygon(
+            QPolygon([
+                up_center + QPoint(-4, 2),
+                up_center + QPoint(4, 2),
+                up_center + QPoint(0, -3),
+            ])
+        )
+        down_center = down_rect.center()
+        painter.drawPolygon(
+            QPolygon([
+                down_center + QPoint(-4, -2),
+                down_center + QPoint(4, -2),
+                down_center + QPoint(0, 3),
+            ])
+        )
 
 
 def create_light_palette():
@@ -55,9 +107,11 @@ def create_light_palette():
 
 
 class ClockInApp(QMainWindow):
-    def __init__(self, employee_name="", on_close=None):
+    def __init__(self, employee_name="", start_time="", end_time="", on_close=None):
         super().__init__()
         self.employee_name = employee_name
+        self.start_time = start_time
+        self.end_time = end_time
         self.on_close = on_close
         self.setWindowTitle("月打卡記錄表輸入系統 (Clock-in Management)")
         self.resize(850, 750)
@@ -93,7 +147,7 @@ class ClockInApp(QMainWindow):
 
         # 年份選擇
         controls_layout.addWidget(QLabel("年份:"))
-        self.year_spin = QSpinBox()
+        self.year_spin = ArrowSpinBox()
         current_year = datetime.now().year
         self.year_spin.setRange(2000, 2040)
         self.year_spin.setValue(current_year)
@@ -102,7 +156,7 @@ class ClockInApp(QMainWindow):
 
         # 月份選擇
         controls_layout.addWidget(QLabel("月份:"))
-        self.month_spin = QSpinBox()
+        self.month_spin = ArrowSpinBox()
         current_month = datetime.now().month
         self.month_spin.setRange(1, 12)
         self.month_spin.setValue(current_month)
@@ -149,7 +203,7 @@ class ClockInApp(QMainWindow):
         lbl_date.setStyleSheet("font-weight: bold; color: #2C3E50;")
         header_layout.addWidget(lbl_date, 0, 0)
 
-        headers = ["首次上班", "首次下班", "二次上班", "二次下班", "加班時數", "早退時數"]
+        headers = ["首次上班", "首次下班", "二次上班", "二次下班", "加班時數", "早退時數", "遲到時數"]
         for col_idx, text in enumerate(headers, start=1):
             lbl = QLabel(text)
             lbl.setAlignment(Qt.AlignCenter)
@@ -163,6 +217,7 @@ class ClockInApp(QMainWindow):
         header_layout.setColumnStretch(4, 2)
         header_layout.setColumnStretch(5, 2)
         header_layout.setColumnStretch(6, 2)
+        header_layout.setColumnStretch(7, 2)
 
         main_layout.addWidget(header_frame)
 
@@ -208,14 +263,14 @@ class ClockInApp(QMainWindow):
             background-color: #F4F7F6;
         }
         QGroupBox {
-            # font-weight: bold;
-            # font-size: 13px;
-            # border: 1px solid #DCDFE6;
-            # border-radius: 8px;
-            # margin-top: 6px;
-            # padding-top: 12px;
-            # background-color: #FFFFFF;
-            # color: #333333;
+            /* font-weight: bold; */
+            /* font-size: 13px; */
+            /* border: 1px solid #DCDFE6; */
+            /* border-radius: 8px; */
+            /* margin-top: 6px; */
+            /* padding-top: 12px; */
+            /* background-color: #FFFFFF; */
+            /* color: #333333; */
         }
         QGroupBox::title {
             subcontrol-origin: margin;
@@ -232,22 +287,17 @@ class ClockInApp(QMainWindow):
         }
         QSpinBox::up-button, QSpinBox::down-button {
             width: 18px;
-            # background-color: #000000;
-            border-left: 1px solid #555555;
+            background-color: #E8EEF5;
+            border-left: 1px solid #D0D7DE;
         }
-        QSpinBox::up-arrow {
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-bottom: 5px solid #FFFFFF;
+        QSpinBox::up-button:hover, QSpinBox::down-button:hover {
+            background-color: #D6E8FA;
         }
-        QSpinBox::down-arrow {
-            width: 0;
-            height: 0;
-            border-left: 4px solid transparent;
-            border-right: 4px solid transparent;
-            border-top: 5px solid #FFFFFF;
+        QSpinBox::up-button:pressed, QSpinBox::down-button:pressed {
+            background-color: #C3DCF5;
+        }
+        QSpinBox::up-arrow, QSpinBox::down-arrow {
+            image: none;
         }
         QSpinBox QLineEdit {
             background-color: #FFFFFF;
@@ -370,7 +420,7 @@ class ClockInApp(QMainWindow):
 
             # 四格打卡輸入框
             inputs = []
-            placeholders = ["0830", "1200", "1300", "1700"]
+            placeholders = [self.start_time or "0830", "1200", "1300", self.end_time or "1730"]
             for col in range(4):
                 edit = QLineEdit()
                 edit.setPlaceholderText(placeholders[col])
@@ -383,10 +433,13 @@ class ClockInApp(QMainWindow):
 
             overtime_label = QLabel()
             early_label = QLabel()
+            late_label = QLabel()
             overtime_label.setAlignment(Qt.AlignCenter)
             early_label.setAlignment(Qt.AlignCenter)
+            late_label.setAlignment(Qt.AlignCenter)
             grid.addWidget(overtime_label, 0, 5)
             grid.addWidget(early_label, 0, 6)
+            grid.addWidget(late_label, 0, 7)
 
             # 寬度比例分配
             grid.setColumnStretch(0, 2)
@@ -396,9 +449,10 @@ class ClockInApp(QMainWindow):
             grid.setColumnStretch(4, 2)
             grid.setColumnStretch(5, 2)
             grid.setColumnStretch(6, 2)
+            grid.setColumnStretch(7, 2)
 
             self.daily_inputs[day] = inputs
-            self.daily_results[day] = (overtime_label, early_label)
+            self.daily_results[day] = (overtime_label, early_label, late_label)
             self.scroll_layout.addWidget(row_frame)
 
         self.scroll_layout.addStretch(1)
@@ -418,10 +472,14 @@ class ClockInApp(QMainWindow):
         month = self.month_spin.value()
         is_weekend = datetime(year, month, day).weekday() >= 5
         overtime_str, early_str = calculate_daily_overtime_and_early(
-            *(edit.text() for edit in inputs), is_weekend=is_weekend
+            *(edit.text() for edit in inputs),
+            is_weekend=is_weekend,
+            work_off=self.end_time,
+            work_start=self.start_time,
         )
         results[0].setText(overtime_str)
         results[1].setText(early_str)
+        results[2].setText("" if is_weekend else calculate_late(inputs[0].text(), self.start_time))
 
     def clear_all_inputs(self):
         """清空所有打卡輸入格"""
@@ -453,7 +511,7 @@ class ClockInApp(QMainWindow):
             # ---------------------------------------------------------
             # 1. Excel 大標題
             # ---------------------------------------------------------
-            ws.merge_cells("A1:H1")
+            ws.merge_cells("A1:I1")
             title_cell = ws["A1"]
             title_cell.value = f"{year} 年 {month:02d} 月 員工打卡表記錄"
             title_cell.font = Font(name="微軟正黑體", size=16, bold=True, color="FFFFFF")
@@ -464,7 +522,7 @@ class ClockInApp(QMainWindow):
             # ---------------------------------------------------------
             # 2. 表格欄位標題 (Header)
             # ---------------------------------------------------------
-            headers = ["日期", "星期", "首次上班", "首次下班", "二次上班", "二次下班", "加班時數", "早退時數"]
+            headers = ["日期", "星期", "首次上班", "首次下班", "二次上班", "二次下班", "加班時數", "早退時數", "遲到時數"]
             ws.row_dimensions[2].height = 25
             
             header_fill = PatternFill(start_color="DCE6F1", end_color="DCE6F1", fill_type="solid")
@@ -500,13 +558,18 @@ class ClockInApp(QMainWindow):
                 t2_out = inputs[3].text().strip()
 
                 overtime_str, early_str = calculate_daily_overtime_and_early(
-                    t1_in, t1_out, t2_in, t2_out, is_weekend=weekday_idx >= 5
+                    t1_in, t1_out, t2_in, t2_out,
+                    is_weekend=weekday_idx >= 5,
+                    work_off=self.end_time,
+                    work_start=self.start_time,
                 )
+
+                late_str = "" if weekday_idx >= 5 else calculate_late(t1_in, self.start_time)
 
                 row_idx = day + 2 # row 1: title, row 2: header
                 ws.row_dimensions[row_idx].height = 22
                 
-                row_data = [date_str, weekday_str, t1_in, t1_out, t2_in, t2_out, overtime_str, early_str]
+                row_data = [date_str, weekday_str, t1_in, t1_out, t2_in, t2_out, overtime_str, early_str, late_str]
 
                 for col_idx, val in enumerate(row_data, start=1):
                     cell = ws.cell(row=row_idx, column=col_idx, value=val)

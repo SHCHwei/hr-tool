@@ -7,13 +7,15 @@ os.environ.setdefault("QT_QPA_PLATFORMTHEME", "generic")
 
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout
+    QLabel, QLineEdit, QPushButton, QScrollArea, QGridLayout, QComboBox
 )
 from PySide6.QtCore import Qt
 
 CARDS_PER_ROW = 3
 APP_DIR_NAME = "HRTool"
 EMPLOYEE_FILENAME = "employees.json"
+START_KEY = "workStart"
+END_KEY = "workOff"
 
 
 def get_data_dir():
@@ -37,8 +39,8 @@ def load_employees(path=None):
         with open(path, "r", encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        return []
-    return [n for n in data if isinstance(n, str)] if isinstance(data, list) else []
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def save_employees(employees, path=None):
@@ -55,7 +57,7 @@ class EmployeeCardsWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("員工列表")
         self.resize(700, 500)
-        self.employees = []
+        self.employees = {}
         self.clock_in_window = None
 
         central = QWidget()
@@ -65,11 +67,21 @@ class EmployeeCardsWindow(QMainWindow):
         top = QHBoxLayout()
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("請輸入員工名稱")
+        self.name_input.setMaximumWidth(200)
         self.name_input.returnPressed.connect(self.add_employee)
+        self.start_combo = QComboBox()
+        self.end_combo = QComboBox()
+        self.start_combo.addItems(["0800", "0830", "0900"])
+        self.end_combo.addItems(["1700", "1730", "1800"])
         self.add_button = QPushButton("增加")
         self.add_button.clicked.connect(self.add_employee)
         top.addWidget(self.name_input)
+        top.addWidget(QLabel("上班"))
+        top.addWidget(self.start_combo)
+        top.addWidget(QLabel("下班"))
+        top.addWidget(self.end_combo)
         top.addWidget(self.add_button)
+        top.addStretch(1)
         layout.addLayout(top)
 
         scroll = QScrollArea()
@@ -86,14 +98,17 @@ class EmployeeCardsWindow(QMainWindow):
 
     def load_employees(self):
         """從 employees.json 載入員工名單並顯示成卡片。"""
-        for name in load_employees():
-            self._append_card(name)
+        for name, times in load_employees().items():
+            self._append_card(name, times)
 
     def add_employee(self):
         name = self.name_input.text().strip()
-        if not name:
+        if not name or name in self.employees:
             return
-        self._append_card(name)
+        self._append_card(name, {
+            START_KEY: self.start_combo.currentText(),
+            END_KEY: self.end_combo.currentText(),
+        })
         try:
             save_employees(self.employees)
         except OSError as e:
@@ -101,9 +116,9 @@ class EmployeeCardsWindow(QMainWindow):
         self.name_input.clear()
         self.name_input.setFocus()
 
-    def _append_card(self, name):
+    def _append_card(self, name, times):
         index = len(self.employees)
-        self.employees.append(name)
+        self.employees[name] = times
         card = self._make_card(name)
         card.clicked.connect(
             lambda checked=False, employee_name=name: self.open_clock_in(employee_name)
@@ -124,8 +139,12 @@ class EmployeeCardsWindow(QMainWindow):
     def open_clock_in(self, employee_name):
         from clock_in_app import ClockInApp
 
+        times = self.employees[employee_name]
         self.clock_in_window = ClockInApp(
-            employee_name, on_close=self.return_to_employee_cards
+            employee_name,
+            start_time=times.get(START_KEY, ""),
+            end_time=times.get(END_KEY, ""),
+            on_close=self.return_to_employee_cards,
         )
         self.clock_in_window.setAttribute(Qt.WA_DeleteOnClose)
         self.hide()

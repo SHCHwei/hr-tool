@@ -15,6 +15,9 @@
 
 from typing import Optional, Tuple
 
+DEFAULT_WORK_OFF = "1730"
+OVERTIME_BUFFER_MINUTES = 15
+
 
 def parse_time(time_str: Optional[str]) -> Optional[Tuple[int, int]]:
     """
@@ -81,14 +84,16 @@ def format_duration(total_minutes: int) -> str:
         return f"{round(total_minutes / 60, 2)}小時"
 
 
-def calculate_overtime_and_early(checkout_str: Optional[str]) -> Tuple[str, str]:
+def calculate_overtime_and_early(
+    checkout_str: Optional[str], work_off: Optional[str] = DEFAULT_WORK_OFF
+) -> Tuple[str, str]:
     """
     依據 GoLang HR/main.go 規則計算加班時數與早退時數。
 
-    規則：
+    規則（work_off 預設 17:30，可由員工個人下班時間取代）：
     - 下班時間基準點：
-      - workOff (早退基準): 17:30 (1050 分鐘)
-      - workOver (加班起算): 17:45 (1065 分鐘)
+      - workOff (早退基準): work_off
+      - workOver (加班起算): work_off + 15 分鐘
     - 跨夜下班判定：
       - 小時 < 6 (00:00 ~ 05:59) 視為跨夜至隔日凌晨，加 24 小時計算。
     - 早退計算：
@@ -112,8 +117,9 @@ def calculate_overtime_and_early(checkout_str: Optional[str]) -> Tuple[str, str]
 
     total_minutes = h * 60 + m
 
-    work_off_minutes = 17 * 60 + 30   # 17:30
-    work_over_minutes = 17 * 60 + 45  # 17:45
+    work_off_parsed = parse_time(work_off) or parse_time(DEFAULT_WORK_OFF)
+    work_off_minutes = work_off_parsed[0] * 60 + work_off_parsed[1]
+    work_over_minutes = work_off_minutes + OVERTIME_BUFFER_MINUTES
 
     overtime_str = ""
     early_str = ""
@@ -134,6 +140,7 @@ def calculate_daily_overtime_and_early(
     t2_in: Optional[str],
     t2_out: Optional[str],
     is_weekend: bool = False,
+    work_off: Optional[str] = DEFAULT_WORK_OFF,
 ) -> Tuple[str, str]:
     """依平日/週末規則計算當日加班與早退時數。"""
     if is_weekend:
@@ -153,7 +160,16 @@ def calculate_daily_overtime_and_early(
         return (format_duration(worked_minutes), "")
 
     checkout_time = get_effective_checkout(t1_in, t1_out, t2_in, t2_out)
-    return calculate_overtime_and_early(checkout_time)
+    return calculate_overtime_and_early(checkout_time, work_off)
+
+
+def calculate_late(first_in: Optional[str], work_start: Optional[str]) -> str:
+    """首次上班打卡晚於員工上班時間時，回傳遲到時數；否則回傳空字串。"""
+    actual = parse_time(first_in)
+    expected = parse_time(work_start)
+    if not actual or not expected:
+        return ""
+    return format_duration((actual[0] * 60 + actual[1]) - (expected[0] * 60 + expected[1]))
 
 
 def get_effective_checkout(

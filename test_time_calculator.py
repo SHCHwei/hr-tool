@@ -1,6 +1,6 @@
 import unittest
 
-from time_calculator import calculate_daily_overtime_and_early, is_valid_hhmm
+from time_calculator import calculate_daily_overtime_and_early, calculate_late, is_valid_hhmm
 
 
 class DailyOvertimeCalculationTests(unittest.TestCase):
@@ -26,6 +26,27 @@ class DailyOvertimeCalculationTests(unittest.TestCase):
         )
 
         self.assertEqual(result, ("4.0小時", ""))
+
+    def test_weekday_uses_employee_work_off(self):
+        self.assertEqual(
+            calculate_daily_overtime_and_early("0800", "1200", "1300", "1630", work_off="1700"),
+            ("", "0.5小時"),
+        )
+        self.assertEqual(
+            calculate_daily_overtime_and_early("0800", "1200", "1300", "1800", work_off="1700"),
+            ("0.75小時", ""),
+        )
+        self.assertEqual(
+            calculate_daily_overtime_and_early("0800", "1200", "1300", "1710", work_off="1700"),
+            ("", ""),
+        )
+
+    def test_late_when_first_in_after_work_start(self):
+        self.assertEqual(calculate_late("0815", "0800"), "0.25小時")
+        self.assertEqual(calculate_late("0800", "0800"), "")
+        self.assertEqual(calculate_late("0750", "0800"), "")
+        self.assertEqual(calculate_late("", "0800"), "")
+        self.assertEqual(calculate_late("0900", ""), "")
 
     def test_weekday_keeps_existing_checkout_rule(self):
         result = calculate_daily_overtime_and_early(

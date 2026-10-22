@@ -16,6 +16,7 @@ APP_DIR_NAME = "HRTool"
 EMPLOYEE_FILENAME = "employees.json"
 START_KEY = "workStart"
 END_KEY = "workOff"
+WORK_SCHEDULES = ("0800 - 1700", "0830 - 1730", "0900 - 1800")
 
 
 def get_data_dir():
@@ -69,17 +70,13 @@ class EmployeeCardsWindow(QMainWindow):
         self.name_input.setPlaceholderText("請輸入員工名稱")
         self.name_input.setMaximumWidth(200)
         self.name_input.returnPressed.connect(self.add_employee)
-        self.start_combo = QComboBox()
-        self.end_combo = QComboBox()
-        self.start_combo.addItems(["0800", "0830", "0900"])
-        self.end_combo.addItems(["1700", "1730", "1800"])
+        self.schedule_combo = QComboBox()
+        self.schedule_combo.addItems(WORK_SCHEDULES)
         self.add_button = QPushButton("增加")
         self.add_button.clicked.connect(self.add_employee)
         top.addWidget(self.name_input)
-        top.addWidget(QLabel("上班"))
-        top.addWidget(self.start_combo)
-        top.addWidget(QLabel("下班"))
-        top.addWidget(self.end_combo)
+        top.addWidget(QLabel("上下班時段"))
+        top.addWidget(self.schedule_combo)
         top.addWidget(self.add_button)
         top.addStretch(1)
         layout.addLayout(top)
@@ -105,9 +102,10 @@ class EmployeeCardsWindow(QMainWindow):
         name = self.name_input.text().strip()
         if not name or name in self.employees:
             return
+        start_time, end_time = self.schedule_combo.currentText().split(" - ", 1)
         self._append_card(name, {
-            START_KEY: self.start_combo.currentText(),
-            END_KEY: self.end_combo.currentText(),
+            START_KEY: start_time,
+            END_KEY: end_time,
         })
         try:
             save_employees(self.employees)

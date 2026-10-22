@@ -1,16 +1,8 @@
 """
 考勤時間計算模組 (Attendance Time Calculator)
 
-參考 /home/awei/develop/SideProject/GoLang_practise/HR/main.go 核心規則：
-1. 基準下班時間 (workOff): 17:30:00 (Go 代碼中以 17:29:59 判斷)
-2. 加班起算時間 (workOver): 17:45:00
-3. 跨日判定: 下班時間小時數 < 6 (00:00 ~ 05:59) 視為跨夜加班至隔日 (加24小時)
-4. 早退計算: 下班時間早於 17:30，早退時長 = 17:30 - 下班時間
-5. 加班計算: 下班時間晚於 17:45，加班時長 = 下班時間 - 17:45
-6. 正常緩衝區間: 17:30 <= 下班時間 <= 17:45，不計早退亦不計加班
-7. 時間格式化:
-   - 滿小時: "X小時Y分" (例如 "1小時0分", "1小時15分")
-   - 未滿小時: "Y分" (例如 "15分", "30分")
+平日加班包含首次上班早於 workStart 的時間，以及各出勤段超過 workOff + 15 分鐘的時間。
+週末則將完整的打卡區間工時全數計為加班。
 """
 
 from typing import Optional, Tuple
@@ -85,10 +77,13 @@ def format_duration(total_minutes: int) -> str:
 
 
 def calculate_overtime_and_early(
-    checkout_str: Optional[str], work_off: Optional[str] = DEFAULT_WORK_OFF
+    checkout_str: Optional[str],
+    work_off: Optional[str] = DEFAULT_WORK_OFF,
+    first_in: Optional[str] = None,
+    work_start: Optional[str] = None,
 ) -> Tuple[str, str]:
     """
-    依據 GoLang HR/main.go 規則計算加班時數與早退時數。
+    計算下班造成的加班/早退，以及可選的提早上班加班時數。
 
     規則（work_off 預設 17:30，可由員工個人下班時間取代）：
     - 下班時間基準點：
@@ -102,13 +97,30 @@ def calculate_overtime_and_early(
       - 下班時間 > 17:45 => 加班時長 = 下班時間 - 17:45
     - 正常緩衝區間：
       - 17:30 <= 下班時間 <= 17:45 => 無加班亦無早退
+    - 若提供 first_in 與 work_start，首次上班早於 work_start 的差額加進加班時數。
 
     回傳：
         (overtime_str, early_str): (加班時數, 早退時數)
     """
+    overtime_minutes, early_minutes = _calculate_overtime_and_early_minutes(
+        checkout_str, work_off
+    )
+    actual_start = parse_time(first_in)
+    expected_start = parse_time(work_start)
+    if actual_start and expected_start:
+        actual_start_minutes = actual_start[0] * 60 + actual_start[1]
+        expected_start_minutes = expected_start[0] * 60 + expected_start[1]
+        overtime_minutes += max(0, expected_start_minutes - actual_start_minutes)
+
+    return (format_duration(overtime_minutes), format_duration(early_minutes))
+
+
+def _calculate_overtime_and_early_minutes(
+    checkout_str: Optional[str], work_off: Optional[str]
+) -> Tuple[int, int]:
     parsed = parse_time(checkout_str)
     if not parsed:
-        return ("", "")
+        return (0, 0)
 
     h, m = parsed
     # 跨日判斷：小時 < 6 視為次日凌晨 (00:00 ~ 05:59)
@@ -116,22 +128,15 @@ def calculate_overtime_and_early(
         h += 24
 
     total_minutes = h * 60 + m
-
     work_off_parsed = parse_time(work_off) or parse_time(DEFAULT_WORK_OFF)
     work_off_minutes = work_off_parsed[0] * 60 + work_off_parsed[1]
     work_over_minutes = work_off_minutes + OVERTIME_BUFFER_MINUTES
 
-    overtime_str = ""
-    early_str = ""
-
     if total_minutes < work_off_minutes:
-        early_diff = work_off_minutes - total_minutes
-        early_str = format_duration(early_diff)
-    elif total_minutes > work_over_minutes:
-        over_diff = total_minutes - work_over_minutes
-        overtime_str = format_duration(over_diff)
-
-    return (overtime_str, early_str)
+        return (0, work_off_minutes - total_minutes)
+    if total_minutes > work_over_minutes:
+        return (total_minutes - work_over_minutes, 0)
+    return (0, 0)
 
 
 def calculate_daily_overtime_and_early(
@@ -141,8 +146,9 @@ def calculate_daily_overtime_and_early(
     t2_out: Optional[str],
     is_weekend: bool = False,
     work_off: Optional[str] = DEFAULT_WORK_OFF,
+    work_start: Optional[str] = None,
 ) -> Tuple[str, str]:
-    """依平日/週末規則計算當日加班與早退時數。"""
+    """依平日/週末規則計算每日加班與早退；平日雙段出勤分段計算加班。"""
     if is_weekend:
         worked_minutes = 0
         for time_in, time_out in ((t1_in, t1_out), (t2_in, t2_out)):
@@ -159,8 +165,49 @@ def calculate_daily_overtime_and_early(
 
         return (format_duration(worked_minutes), "")
 
+    if t2_in and t2_in.strip():
+        work_off_parsed = parse_time(work_off) or parse_time(DEFAULT_WORK_OFF)
+        work_over_minutes = (
+            work_off_parsed[0] * 60
+            + work_off_parsed[1]
+            + OVERTIME_BUFFER_MINUTES
+        )
+
+        first_checkout_overtime, _ = _calculate_overtime_and_early_minutes(
+            t1_out, work_off
+        )
+        overtime_minutes = first_checkout_overtime
+
+        parsed_t2_in = parse_time(t2_in)
+        parsed_t2_out = parse_time(t2_out)
+        if parsed_t2_in and parsed_t2_out:
+            start_minutes = parsed_t2_in[0] * 60 + parsed_t2_in[1]
+            end_minutes = parsed_t2_out[0] * 60 + parsed_t2_out[1]
+            if parsed_t2_in[0] < 6:
+                start_minutes += 24 * 60
+            if parsed_t2_out[0] < 6:
+                end_minutes += 24 * 60
+            if end_minutes < start_minutes:
+                end_minutes += 24 * 60
+            overtime_minutes += max(
+                0, end_minutes - max(start_minutes, work_over_minutes)
+            )
+
+        _, early_minutes = _calculate_overtime_and_early_minutes(t2_out, work_off)
+        actual_start = parse_time(t1_in)
+        expected_start = parse_time(work_start)
+        if actual_start and expected_start:
+            actual_start_minutes = actual_start[0] * 60 + actual_start[1]
+            expected_start_minutes = expected_start[0] * 60 + expected_start[1]
+            overtime_minutes += max(
+                0, expected_start_minutes - actual_start_minutes
+            )
+        return (format_duration(overtime_minutes), format_duration(early_minutes))
+
     checkout_time = get_effective_checkout(t1_in, t1_out, t2_in, t2_out)
-    return calculate_overtime_and_early(checkout_time, work_off)
+    return calculate_overtime_and_early(
+        checkout_time, work_off, first_in=t1_in, work_start=work_start
+    )
 
 
 def calculate_late(first_in: Optional[str], work_start: Optional[str]) -> str:

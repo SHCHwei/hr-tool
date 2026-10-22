@@ -426,7 +426,9 @@ class ClockInApp(QMainWindow):
         is_weekend = datetime(year, month, day).weekday() >= 5
         overtime_str, early_str = calculate_daily_overtime_and_early(
             *(edit.text() for edit in inputs),
-            is_weekend=is_weekend, work_off=self.end_time
+            is_weekend=is_weekend,
+            work_off=self.end_time,
+            work_start=self.start_time,
         )
         results[0].setText(overtime_str)
         results[1].setText(early_str)
@@ -510,7 +512,9 @@ class ClockInApp(QMainWindow):
 
                 overtime_str, early_str = calculate_daily_overtime_and_early(
                     t1_in, t1_out, t2_in, t2_out,
-                    is_weekend=weekday_idx >= 5, work_off=self.end_time
+                    is_weekend=weekday_idx >= 5,
+                    work_off=self.end_time,
+                    work_start=self.start_time,
                 )
 
                 late_str = "" if weekday_idx >= 5 else calculate_late(t1_in, self.start_time)
